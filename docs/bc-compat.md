@@ -20,7 +20,13 @@ every known API divergence between the Java source and the .NET 2.4.0 API.
   `PrincipalAuthorization.cs` (`out` is a keyword).
 - Added `using System.Text.Json;` in `CapMatch.cs` (`JsonValueKind`).
 
-## Open compatibility items (need `dotnet build` to confirm/fix)
+## Verified (dotnet build + test on SDK 8.0.424)
+
+The items below were flagged as open during the port. They were all resolved
+during the first real build; `dotnet build` (TreatWarningsAsErrors) and
+`dotnet test` (69/69) pass. The notes remain as the resolution record.
+
+### Core library (`src/Varwof.Aic/`)
 
 ### Core library (`src/Varwof.Aic/`)
 
@@ -42,9 +48,9 @@ every known API divergence between the Java source and the .NET 2.4.0 API.
 - Other tests have namespace/reference issues due to the BouncyCastle API
   differences above.
 
-## When an SDK becomes available
+## Result
 
-1. `dotnet build` and fix each item above.
-2. `dotnet test` — the 69 ported tests must mirror the Java results.
-3. Cross-check enum names, OID constants, DER/GeneralizedTime encoding against
-   the Java suite (`aic-sdk-java/src/test/...`).
+- `dotnet build`: succeeded, 0 warnings / 0 errors (TreatWarningsAsErrors).
+- `dotnet test`: **69/69 passed**, 0 failed, 0 skipped — mirrors the Java suite.
+- Enum names, OID constants, and DER/GeneralizedTime encoding were cross-checked
+  against the Go-generated vectors carried over from the Java suite.

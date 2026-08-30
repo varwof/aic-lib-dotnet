@@ -24,16 +24,13 @@ done; the canonical "where we are" state lives in
 
 ## Current
 
-- Core library: several BouncyCastle 2.4.0 API compatibility issues remain
-  (see [bc-compat.md](bc-compat.md) "Open compatibility items").
-- Test project: `JwtCapMatchTest.cs` compiles; others pending the fixes above.
-- **Blocked**: no .NET SDK on the development machine — cannot compile or run
-  xUnit locally. Correctness verified by manual review against the Java/Go
-  references.
+- **Complete.** Built and tested on .NET SDK 8.0.424 (linux-x64).
+- `dotnet build`: 0 warnings / 0 errors (TreatWarningsAsErrors).
+- `dotnet test`: **69/69 passed** — DER vectors, JWS round-trips, JWT
+  validator, capability matching, cert build/parse, Go cross-conformance.
 
-## Next steps (once a .NET SDK is available)
+## Status of distribution
 
-1. Run all 69 Java tests against the C# port.
-2. Fix remaining BouncyCastle API compatibility issues.
-3. Cross-language consistency check: enum names, OID constants,
-   DER/GeneralizedTime encoding.
+The library is buildable and testable from source on .NET 8. CI configuration,
+NuGet packaging, and Windows/macOS runner coverage are tracked as GitHub
+issues and will be added over time.

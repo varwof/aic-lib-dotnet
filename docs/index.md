@@ -7,9 +7,9 @@ Java SDK and the Go reference implementation.
 
 - Java source suite: **69/69 green** (DER vectors, JWS, JWT validator,
   capability matching, cert build/parse, Go conformance).
-- C# port: structurally complete; **not yet compiled** — no .NET SDK locally.
-  Code reviewed against BouncyCastle.Cryptography 2.4.0 by inspection.
-- See [bc-compat.md](bc-compat.md) for the open compatibility items and
+- C# port: **complete** — built and tested on .NET SDK 8.0.424 (linux-x64),
+  **69/69 tests pass** with 0 warnings / 0 errors (TreatWarningsAsErrors).
+- See [bc-compat.md](bc-compat.md) for the verified compatibility record and
   [porting.md](porting.md) for the work log.
 
 ## Layout
