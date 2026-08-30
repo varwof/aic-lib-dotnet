@@ -28,10 +28,6 @@ public static class Oids
 
     /// <summary>PrincipalAuthorization extension OID : 1.3.6.1.4.1.66257.1.2</summary>
     public static readonly DerObjectIdentifier PrincipalAuthorization = Varwof.Branch("1.2");
-    /// <summary>Capability scheme registry (reserved) : 1.3.6.1.4.1.66257.1.3</summary>
-    public static readonly DerObjectIdentifier CapabilitySchemeRegistry = Varwof.Branch("1.3");
-    /// <summary>Vendor extension registry (reserved) : 1.3.6.1.4.1.66257.1.4</summary>
-    public static readonly DerObjectIdentifier VendorExtensionRegistry = Varwof.Branch("1.4");
     /// <summary>Renewal token : 1.3.6.1.4.1.66257.1.6</summary>
     public static readonly DerObjectIdentifier RenewalToken = Varwof.Branch("1.6");
 
