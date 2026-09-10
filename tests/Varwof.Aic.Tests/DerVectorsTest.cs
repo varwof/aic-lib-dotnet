@@ -137,4 +137,15 @@ public class DerVectorsTest
         PrincipalAuthorization pa = PrincipalAuthorization.Parse(TestHex.DecodeHex(DerVectors.Pa));
         Assert.Equal(DerVectors.Pa, TestHex.EncodeHex(pa.Encode()));
     }
+
+    [Fact]
+    public void DaTbsV2MatchesGo()
+    {
+        DelegationAuthTbs tbs = DelegationAuthTbs.Parse(TestHex.DecodeHex(DerVectors.DaTbsV2));
+        Assert.Equal(2, tbs.Version);
+        Assert.NotNull(tbs.AgentKeyBinding);
+        Assert.False(tbs.AgentKeyBinding.IsZero());
+        Assert.Equal(TestHex.EncodeHex(tbs.AgentKeyBinding.KeyHash).ToUpperInvariant(), TokenFixtures.DaTbsV2KeyHash.ToUpperInvariant());
+        Assert.Equal(DerVectors.DaTbsV2, TestHex.EncodeHex(tbs.Encode()));
+    }
 }

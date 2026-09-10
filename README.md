@@ -17,7 +17,7 @@ implementation (`varwof/types`) byte-for-byte / semantically:
 - **`draft-wei-aic-jwt`** — AIC-JWT: the JSON Web Token profile.
 
 The port targets **.NET 8.0** with **BouncyCastle.Cryptography 2.4.0** and
-`System.Text.Json`. The full Java test suite (69 tests) has been ported to
+`System.Text.Json`. The full Java test suite (72 tests) has been ported to
 xUnit, including Go cross-conformance vectors.
 
 ## Why AIC?
@@ -41,13 +41,13 @@ reference:
 | Go (reference) | [varwof/types](https://github.com/varwof/types) | complete |
 | TypeScript | [varwof/aic-jwt](https://github.com/varwof/aic-jwt) | complete (18 tests) |
 | C / OpenSSL | [varwof/openaic](https://github.com/varwof/openaic) | experimental (13 tests) |
-| Java | [varwof/aic-lib-java](https://github.com/varwof/aic-lib-java) | complete (69 tests) |
-| C# | [**this repo (aic-lib-dotnet)**](https://github.com/varwof/aic-lib-dotnet) | complete (69 tests) |
+| Java | [varwof/aic-lib-java](https://github.com/varwof/aic-lib-java) | complete (72 tests) |
+| C# | [**this repo (aic-lib-dotnet)**](https://github.com/varwof/aic-lib-dotnet) | complete (72 tests) |
 
 ## Status
 
 > **Complete.** Verified on .NET SDK 8.0.424 (linux-x64): the full xUnit suite
-> passes **69/69** (DER vectors, JWS round-trips, JWT validator, capability
+> passes **72/72** (DER vectors, JWS round-trips, JWT validator, capability
 > matching, cert build/parse, Go cross-conformance), with
 > `TreatWarningsAsErrors` enabled (0 warnings, 0 errors).
 >
@@ -73,7 +73,7 @@ aic-lib-dotnet/
 │   ├── Cert/                       AicCertificateBuilder, AicCertificates
 │   └── Jwt/                        Validator, Jws, Claims, Constraints,
 │                                   KeyHash, NonceStore, CapMatch
-└── tests/Varwof.Aic.Tests/         xUnit port of the 69 Java tests
+└── tests/Varwof.Aic.Tests/         xUnit port of the 72 Java tests
 ```
 
 ## Requirements
@@ -90,7 +90,7 @@ dotnet build           # TreatWarningsAsErrors in the src project
 dotnet test            # run the xUnit suite
 ```
 
-Expected: `Passed! - Failed: 0, Passed: 69, Skipped: 0, Total: 69`
+Expected: `Passed! - Failed: 0, Passed: 72, Skipped: 0, Total: 72`
 (verified on .NET SDK 8.0.424, linux-x64).
 
 ## Usage (API surface mirrors the Java SDK)

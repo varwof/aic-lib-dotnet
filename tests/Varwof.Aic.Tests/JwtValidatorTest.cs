@@ -70,7 +70,13 @@ public class JwtValidatorTest
         Claims.Header daHdr = new() { Alg = "ES256", Typ = Validator.TypDa, Kid = "principal-1" };
         Claims.DaClaims da = new()
         {
-            Ver = 1,
+            Ver = 2,
+            Iss = Realm + ":" + PrincipalId,
+            Sub = AgentId,
+            Aud = new Claims.Audience(new List<string> { Issuer }),
+            Exp = Iat + 3600,
+            Iat = Iat,
+            Jti = p.Nonce,
             AgentId = AgentId,
             Principal = new Claims.Principal { Realm = Realm, Id = PrincipalId, KeyHash = p.KeyHash, HashAlg = "sha-256" },
             Reason = new Claims.Reason { Code = "DATA_ANALYSIS", Desc = "Scheduled production data analysis window" },
@@ -322,7 +328,7 @@ public class JwtValidatorTest
         Claims.OuterClaims outer = new()
         {
             Iss = Issuer,
-            Sub = AgentId,
+            Sub = Realm + ":" + PrincipalId,
             Aud = new Claims.Audience(new List<string> { Audience }),
             Iat = Iat,
             Exp = Iat + 3600,
@@ -336,12 +342,19 @@ public class JwtValidatorTest
                 Capabilities = new List<Claims.Capability> { new() { Scheme = "database", Id = "query:DELETE" } },
                 ChainDepth = 0,
                 MaxDepth = 1
-            }
+            },
+            Act = new Claims.Actor { Sub = AgentId }
         };
         Claims.Header daHdr = new() { Alg = "ES256", Typ = Validator.TypDa, Kid = "principal-1" };
         Claims.DaClaims da = new()
         {
-            Ver = 1,
+            Ver = 2,
+            Iss = Realm + ":" + PrincipalId,
+            Sub = Realm + ":" + PrincipalId,
+            Aud = new Claims.Audience(new List<string> { Issuer }),
+            Exp = Iat + 3600,
+            Iat = Iat,
+            Jti = p.Nonce,
             AgentId = AgentId,
             Principal = new Claims.Principal { Realm = Realm, Id = PrincipalId, KeyHash = p.KeyHash, HashAlg = "sha-256" },
             Reason = new Claims.Reason { Code = "DATA_ANALYSIS", Desc = "window" },
@@ -369,38 +382,25 @@ public class JwtValidatorTest
     }
 
     [Fact]
-    public void GoGeneratedOuterTokenParsesAndVerifies()
+    public void DaVersion1Rejected()
     {
-        byte[] principalSpki = KeyHash.ParseJwk(System.Text.Encoding.UTF8.GetBytes(GoFixtures.PrincipalJwkJson));
-
-        Jws.VerifyCompact(GoFixtures.DaToken, "ES256", SigAlgorithms.PublicKeyFromSpki(principalSpki)!);
-        Jws.VerifyCompact(TokenFixtures.JwtValidatorOuterToken, "ES256", SigAlgorithms.PublicKeyFromSpki(principalSpki)!);
-
-        Claims.OuterClaims parsed = JsonSerializer.Deserialize<Claims.OuterClaims>(
-            Jws.ParseCompact(TokenFixtures.JwtValidatorOuterToken)[1], JwtJson.WireOptions)!;
-        Assert.Equal("agent:db-analyst-01", parsed.Sub);
-        Assert.Equal(Issuer, parsed.Iss);
-        Assert.Equal(Validator.ModeRepresentative, parsed.Aic!.DelegationMode);
-        Assert.Equal("0ZcOCORZNYy-DWpqq30jZyHnXgk7dNsQo0c1V3iR4vY", parsed.Cnf!.Jkt);
-        Claims.DaClaims daParsed = JsonSerializer.Deserialize<Claims.DaClaims>(
-            Jws.ParseCompact(GoFixtures.DaToken)[1], JwtJson.WireOptions)!;
-        Assert.Equal("agent:db-analyst-01", daParsed.AgentId);
-
-        Validator.VerifyOptions opts = new()
+        Pair p = Build();
+        Claims.Header daHdr = new() { Alg = "ES256", Typ = Validator.TypDa, Kid = "principal-1" };
+        Claims.DaClaims da = new()
         {
-            Now = FromEpoch(Iat + 60),
-            IssuerSpki = new Dictionary<string, byte[]> { ["ca-2026-01"] = principalSpki },
-            PrincipalJwks = new Dictionary<string, byte[]> { ["principal-zhangsan-2026"] = principalSpki },
-            RequestContext = Ctx(Iat + 60, "10.1.2.3", 1)
+            Ver = 1,
+            AgentId = AgentId,
+            Principal = new Claims.Principal { Realm = Realm, Id = PrincipalId, KeyHash = p.KeyHash, HashAlg = "sha-256" },
+            Reason = new Claims.Reason { Code = "DATA_ANALYSIS", Desc = "Scheduled production data analysis window" },
+            Capabilities = new List<Claims.Capability> { CapDatabase(100) },
+            DelegationMode = Validator.ModeAuthorized,
+            RequestedLifetime = 3600,
+            Ts = Iat,
+            Nonce = p.Nonce
         };
-        AicException ex = Assert.Throws<AicException>(() => Validator.Validate(TokenFixtures.JwtValidatorOuterToken, opts));
-        Assert.True(ex.Message.Contains("key_hash mismatch") || ex.Message.Contains("nonce") || ex.Message.Contains("step4"), ex.Message);
-    }
-
-    internal static class GoFixtures
-    {
-        public const string DaToken = "eyJhbGciOiJFUzI1NiIsInR5cCI6ImFpYytkYStqd3QiLCJraWQiOiJwcmluY2lwYWwtemhhbmdzYW4tMjAyNiJ9.eyJ2ZXIiOjEsImFnZW50X2lkIjoiYWdlbnQ6ZGItYW5hbHlzdC0wMSIsInByaW5jaXBhbCI6eyJyZWFsbSI6ImNvcnAuY29tIiwiaWQiOiJ6aGFuZ3NhbiIsImtleV9oYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImhhc2hfYWxnIjoic2hhLTI1NiJ9LCJyZWFzb24iOnsiY29kZSI6IkRBVEFfQU5BTFlTSVMiLCJkZXNjIjoiU2NoZWR1bGVkIHByb2R1Y3Rpb24gZGF0YSBhbmFseXNpcyB3aW5kb3cifSwiY2FwYWJpbGl0aWVzIjpbeyJzY2hlbWUiOiJkYXRhYmFzZSIsImlkIjoicXVlcnk6U0VMRUNUIiwicGFyYW1zIjp7Im1heF9yb3dzIjoxMDB9fV0sImRlbGVnYXRpb25fbW9kZSI6InJlcHJlc2VudGF0aXZlIiwiY29uc3RyYWludHMiOlt7InNjaGVtZSI6InZhcndvZi9jb25zdHJhaW50LXYxIiwiaWQiOiJhbGxvd2VkLWNpZHIiLCJwYXJhbXMiOlsiMTAuMC4wLjAvOCJdfV0sInJlcXVlc3RlZF9saWZldGltZSI6MzYwMCwidHMiOjE3NTU0OTk5MDAsIm5vbmNlIjoiYUJjRGVGZ0hpSmtMbU5vUHFSc1R1VndYeVowMTIzNDU2Nzg5YWJjZGVmIn0.RUqMf76xEbbenvXz-3UsxEmV2M5_WwsGfr-i9eeI0zeesoaiUi_zvgrLUs9MiSgffPd4WV3nlIZ7U1daEJtsTw";
-
-        public const string PrincipalJwkJson = "{\"kty\":\"EC\",\"crv\":\"P-256\",\"x\":\"rN1es49KexLagupeD_zOIiz974abUS-HWkDLW6sxUu4\",\"y\":\"B0uChX3GHDsRiVTSaXujwS_Nu_SJ9HtaXRpUMF8EVX4\"}";
+        string daToken = Jws.SignCompact(Serialize(daHdr), Serialize(da), "ES256", p.Principal.Private);
+        Validator.VerifyOptions opts = FullOpts(p, Iat + 60);
+        AicException ex = Assert.Throws<AicException>(() => Validator.ValidateDa(daToken, opts));
+        Assert.Contains("ver must be 2", ex.Message);
     }
 }

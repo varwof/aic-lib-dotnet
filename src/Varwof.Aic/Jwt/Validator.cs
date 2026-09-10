@@ -54,13 +54,14 @@ public static class Validator
     public sealed record Decision(
         bool Permit,
         string Actor,
+        string Executor,
         string Principal,
         IReadOnlyList<Claims.Capability>? Capabilities,
         IReadOnlyList<string>? Notes)
     {
-        public Decision(bool permit, string actor, string? principal,
+        public Decision(bool permit, string actor, string executor, string? principal,
             IEnumerable<Claims.Capability>? capabilities, IEnumerable<string>? notes)
-            : this(permit, actor, principal ?? "", capabilities is null ? null : new List<Claims.Capability>(capabilities),
+            : this(permit, actor, executor, principal ?? "", capabilities is null ? null : new List<Claims.Capability>(capabilities),
                 notes is null ? null : new List<string>(notes))
         {
         }
@@ -302,12 +303,17 @@ public static class Validator
 
         // ---- Decision ----
         string actor = outer.Sub ?? "";
+        string executor = outer.Sub ?? "";
         string principal = outer.Aic!.Principal!.Id ?? "";
         if (ModeRepresentative == outer.Aic.DelegationMode)
         {
-            actor = principal;
+            actor = outer.Aic.Principal.Id ?? "";
+            if (outer.Act is not null)
+            {
+                executor = outer.Act.Sub ?? "";
+            }
         }
-        return new Decision(true, actor, principal, outer.Aic.Capabilities, notes);
+        return new Decision(true, actor, executor, principal, outer.Aic.Capabilities, notes);
     }
 
     private static byte[]? HdrKid(Dictionary<string, byte[]> keys, string? kid)
@@ -441,9 +447,36 @@ public static class Validator
 
     private static void CheckDaRequired(Claims.DaClaims d)
     {
-        if (d.Ver != 1)
+        if (d.Ver != 2)
         {
-            throw new AicException("DA ver must be 1");
+            throw new AicException("DA ver must be 2");
+        }
+        if (string.IsNullOrEmpty(d.Iss) || d.Iss.Length > 256)
+        {
+            throw new AicException("DA iss required, 1..256 chars");
+        }
+        if (string.IsNullOrEmpty(d.Sub) || d.Sub.Length > 256)
+        {
+            throw new AicException("DA sub required, 1..256 chars");
+        }
+        if (d.Aud is null || d.Aud.Size == 0)
+        {
+            throw new AicException("DA aud required");
+        }
+        foreach (string a in d.Aud.Values)
+        {
+            if (string.IsNullOrEmpty(a))
+            {
+                throw new AicException("DA aud must not contain empty strings");
+            }
+        }
+        if (d.Exp == 0)
+        {
+            throw new AicException("DA exp required");
+        }
+        if (string.IsNullOrEmpty(d.Jti) || d.Jti.Length > 128)
+        {
+            throw new AicException("DA jti required, 1..128 chars");
         }
         if (string.IsNullOrEmpty(d.AgentId) || d.AgentId.Length > 256)
         {
@@ -501,11 +534,21 @@ public static class Validator
         {
             throw new AicException("DA nonce required");
         }
+        if (d.Jti != d.Nonce)
+        {
+            throw new AicException("DA jti must equal nonce");
+        }
+        if (d.Iat != 0 && d.Iat != d.Ts)
+        {
+            throw new AicException("DA iat must equal ts when present");
+        }
     }
 
     /// <summary>Validates a DA JWT in isolation: header, claims, signature, binding, nonce.</summary>
     public static Claims.DaClaims ValidateDa(string daToken, VerifyOptions opts)
     {
+        opts ??= new VerifyOptions();
+        DateTime now = opts.Now ?? DateTime.UtcNow;
         if (daToken.Length > MaxTokenSize)
         {
             throw new AicException("DA token size " + daToken.Length + " exceeds max " + MaxTokenSize);
@@ -547,6 +590,39 @@ public static class Validator
             throw new AicException("DA payload malformed: " + ex.Message);
         }
         CheckDaRequired(da);
+        long expectedExp = da.Ts + da.RequestedLifetime;
+        if (da.Exp != expectedExp)
+        {
+            throw new AicException("DA exp " + da.Exp + " must equal ts+requested_lifetime " + expectedExp);
+        }
+        long nowUnix = new DateTimeOffset(now.ToUniversalTime()).ToUnixTimeSeconds();
+        if (nowUnix > da.Exp)
+        {
+            throw new AicException("DA expired (exp " + da.Exp + ")");
+        }
+        if (da.Iss != da.Principal!.SubjectID())
+        {
+            throw new AicException("DA iss \"" + da.Iss + "\" != principal \"" + da.Principal.SubjectID() + "\"");
+        }
+        switch (da.DelegationMode)
+        {
+            case ModeAuthorized:
+                if (da.Sub != da.AgentId)
+                {
+                    throw new AicException("authorized mode: DA sub \"" + da.Sub + "\" must be the agent \"" + da.AgentId + "\"");
+                }
+                break;
+            case ModeRepresentative:
+                if (da.Sub != da.Principal.SubjectID())
+                {
+                    throw new AicException("representative mode: DA sub \"" + da.Sub + "\" must be the resource owner \"" + da.Principal.SubjectID() + "\"");
+                }
+                break;
+        }
+        if (nowUnix - da.Ts > da.RequestedLifetime)
+        {
+            throw new AicException("DA ts " + da.Ts + " is stale (beyond requested_lifetime " + da.RequestedLifetime + ")");
+        }
         byte[] pub = ResolvePrincipalSpki(da.Principal!, hdr.Kid, opts);
         try
         {
@@ -596,6 +672,14 @@ public static class Validator
         {
             throw new AicException("outer jti does not match DA nonce");
         }
+        if (outer.Exp > da.Exp)
+        {
+            throw new AicException("outer exp " + outer.Exp + " exceeds DA exp " + da.Exp);
+        }
+        if (da.Aud is null || !da.Aud.Contains(outer.Iss!))
+        {
+            throw new AicException("DA aud " + da.Aud + " does not include outer iss \"" + outer.Iss + "\"");
+        }
         if (outer.Exp - outer.Iat > da.RequestedLifetime)
         {
             throw new AicException("token lifetime " + (outer.Exp - outer.Iat)
@@ -632,9 +716,30 @@ public static class Validator
 
     private static void CheckConsistency(Claims.OuterClaims o, Claims.DaClaims da)
     {
-        if (da.AgentId != o.Sub)
+        switch (da.DelegationMode)
         {
-            throw new AicException("DA agent_id \"" + da.AgentId + "\" != outer sub \"" + o.Sub + "\"");
+            case ModeRepresentative:
+                if (o.Sub != da.Sub || o.Sub != da.Principal!.SubjectID())
+                {
+                    throw new AicException("representative mode: outer sub \"" + o.Sub + "\" must be the resource owner \"" + da.Sub + "\"");
+                }
+                if (o.Act is null || o.Act.Sub != da.AgentId)
+                {
+                    throw new AicException("representative mode: outer act must carry the agent \"" + da.AgentId + "\"");
+                }
+                break;
+            case ModeAuthorized:
+                if (da.AgentId != o.Sub)
+                {
+                    throw new AicException("DA agent_id \"" + da.AgentId + "\" != outer sub \"" + o.Sub + "\"");
+                }
+                if (o.Act is not null)
+                {
+                    throw new AicException("authorized mode: outer act must be absent");
+                }
+                break;
+            default:
+                throw new AicException("DA delegation_mode invalid");
         }
         if (!JwtJson.JsonEqual(da.Principal, o.Aic!.Principal))
         {

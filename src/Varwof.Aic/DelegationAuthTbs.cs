@@ -24,6 +24,7 @@ public sealed class DelegationAuthTbs : IEquatable<DelegationAuthTbs>
     public int RequestedLifetime { get; }
     public DateTime Timestamp { get; }
     public byte[]? Nonce { get; }
+    public AgentKeyBinding? AgentKeyBinding { get; }
 
     public DelegationAuthTbs(
         int version,
@@ -35,7 +36,8 @@ public sealed class DelegationAuthTbs : IEquatable<DelegationAuthTbs>
         IReadOnlyList<Capability>? authorizationConstraints,
         int requestedLifetime,
         DateTime timestamp,
-        byte[]? nonce)
+        byte[]? nonce,
+        AgentKeyBinding? agentKeyBinding = null)
     {
         Version = version;
         AgentId = agentId ?? throw new ArgumentNullException(nameof(agentId));
@@ -47,6 +49,7 @@ public sealed class DelegationAuthTbs : IEquatable<DelegationAuthTbs>
         RequestedLifetime = requestedLifetime;
         Timestamp = timestamp;
         Nonce = nonce is null ? null : (byte[])nonce.Clone();
+        AgentKeyBinding = agentKeyBinding;
     }
 
     /// <summary>Build the TBS from the corresponding (unsigned) AIC.</summary>
@@ -80,6 +83,10 @@ public sealed class DelegationAuthTbs : IEquatable<DelegationAuthTbs>
         elems.Add(Der.Integer(RequestedLifetime));
         elems.Add(Der.Generalized(Timestamp));
         elems.Add(new DerOctetString(Nonce ?? Array.Empty<byte>()));
+        if (AgentKeyBinding is not null && !AgentKeyBinding.IsZero())
+        {
+            elems.Add(Der.Explicit(1, Asn1Object.FromByteArray(AgentKeyBinding.Encode())));
+        }
         return Der.DerEncode(Der.DerSequence(elems.ToArray()));
     }
 
@@ -138,11 +145,21 @@ public sealed class DelegationAuthTbs : IEquatable<DelegationAuthTbs>
         }
         byte[] nonce = oct.GetOctets();
         ix++;
+        AgentKeyBinding? agentKeyBinding = null;
+        if (ix < seq.Count)
+        {
+            Asn1Object? bindingInner = Der.OptionalTagContent(seq[ix], 1);
+            if (bindingInner is not null)
+            {
+                agentKeyBinding = AgentKeyBinding.Decode(bindingInner);
+                ix++;
+            }
+        }
         if (ix != seq.Count)
         {
             throw new AicException("DelegationAuthTbs: unexpected trailing elements");
         }
-        return new DelegationAuthTbs(version, agentId, uid, reason, caps, mode, constraints, lifetime, ts, nonce);
+        return new DelegationAuthTbs(version, agentId, uid, reason, caps, mode, constraints, lifetime, ts, nonce, agentKeyBinding);
     }
 
     public static DelegationAuthTbs Parse(byte[] derBytes) => Decode(Der.FromBytes(derBytes));
@@ -168,10 +185,11 @@ public sealed class DelegationAuthTbs : IEquatable<DelegationAuthTbs>
         && DelegationMode == other.DelegationMode
         && AuthorizationConstraints.SequenceEqual(other.AuthorizationConstraints)
         && Timestamp == other.Timestamp
-        && (Nonce ?? Array.Empty<byte>()).SequenceEqual(other.Nonce ?? Array.Empty<byte>());
+        && (Nonce ?? Array.Empty<byte>()).SequenceEqual(other.Nonce ?? Array.Empty<byte>())
+        && Equals(AgentKeyBinding, other.AgentKeyBinding);
 
     public override bool Equals(object? obj) => Equals(obj as DelegationAuthTbs);
 
     public override int GetHashCode() => HashCode.Combine(
-        Version, AgentId, PrincipalUid, Reason, RequestedLifetime, Timestamp, Nonce?.Length ?? 0);
+        Version, AgentId, PrincipalUid, Reason, RequestedLifetime, Timestamp, Nonce?.Length ?? 0, AgentKeyBinding);
 }

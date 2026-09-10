@@ -6,11 +6,92 @@ using Org.BouncyCastle.Crypto.Parameters;
 namespace Varwof.Aic;
 
 /// <summary>
-/// Crypto helpers shared between the core package and DelegationAuthTbs:
-/// CurvePolicy-driven asymmetric signature defaults and DER wrapper types.
+/// DA version constants and delegation auth crypto helpers. Port of Go
+/// types/aic.go DAVersion1/DAVersion2 and the signing/verification pipeline.
 /// </summary>
 public static class DelegationAuthCrypto
 {
+    public const int DAVersion1 = 1;
+    public const int DAVersion2 = 2;
+
+    /// <summary>
+    /// Construct an AgentKeyBinding from an agent SPKI DER digest. When algo
+    /// is null it defaults to SHA-256. Unsupported hash algorithms throw.
+    /// </summary>
+    public static AgentKeyBinding MakeAgentKeyBinding(DerObjectIdentifier? algo, byte[] spkiDer)
+    {
+        if (spkiDer is null || spkiDer.Length == 0)
+        {
+            throw new AicException("agent_key_binding: empty agent SPKI DER");
+        }
+        DerObjectIdentifier oid = algo ?? Oids.Sha256;
+        byte[] h = HashAlgorithms.KeyHashFromSpki(oid, spkiDer);
+        return new AgentKeyBinding(h, new AlgorithmIdentifier(oid));
+    }
+
+    /// <summary>Validate AgentKeyBinding: keyHash 1..64 bytes matching declared hashAlgo output.</summary>
+    public static void ValidateAgentKeyBinding(AgentKeyBinding b)
+    {
+        if (b.KeyHash.Length == 0)
+        {
+            throw new AicException("agent_key_binding: keyHash required for DA version 2");
+        }
+        DerObjectIdentifier algo = b.HashAlgoOid();
+        string name = HashAlgorithms.NameForOid(algo);
+        if (name.Length == 0)
+        {
+            throw new AicException("agent_key_binding: hashAlgo " + algo.Id + ": unsupported keyHash algorithm");
+        }
+        int? want = HashAlgorithms.OutputLength(algo);
+        if (want is null)
+        {
+            throw new AicException("agent_key_binding: hashAlgo " + algo.Id + ": no output length mapping (requires external dependency)");
+        }
+        if (b.KeyHash.Length > 64)
+        {
+            throw new AicException("agent_key_binding: keyHash length " + b.KeyHash.Length + ": must be 1-64");
+        }
+        if (b.KeyHash.Length != want.Value)
+        {
+            throw new AicException("agent_key_binding: keyHash length " + b.KeyHash.Length
+                + ": must be " + want + " (" + name + ")");
+        }
+    }
+
+    /// <summary>
+    /// Enforce DA version rules: v1 (or omitted/0) => binding MUST be absent;
+    /// v2 => binding MUST be present and valid; else rejected.
+    /// </summary>
+    public static void ValidateDelegationAuthTBSVersion(DelegationAuthTbs tbs)
+    {
+        if (tbs is null)
+        {
+            throw new AicException("delegation_auth_tbs: nil");
+        }
+        int version = tbs.Version;
+        if (version == 0)
+        {
+            version = DAVersion1;
+        }
+        switch (version)
+        {
+            case DAVersion1:
+                if (tbs.AgentKeyBinding is not null && !tbs.AgentKeyBinding.IsZero())
+                {
+                    throw new AicException("delegation_auth_tbs: version 1: agentKeyBinding must be absent");
+                }
+                break;
+            case DAVersion2:
+                if (tbs.AgentKeyBinding is null || tbs.AgentKeyBinding.IsZero())
+                {
+                    throw new AicException("delegation_auth_tbs: version 2: agentKeyBinding is required");
+                }
+                ValidateAgentKeyBinding(tbs.AgentKeyBinding);
+                break;
+            default:
+                throw new AicException("delegation_auth_tbs: unsupported version " + tbs.Version + ": must be 1 or 2");
+        }
+    }
     /// <summary>CurvePolicy -> AlgorithmIdentifier (EC curve-based SHA-2, RSA PSS, Ed25519).</summary>
     public static AlgorithmIdentifier? SignatureFromCurvePolicy(int curvePolicy)
     {
@@ -48,6 +129,7 @@ public static class DelegationAuthCrypto
     /// </summary>
     public static DelegationAuthorization Sign(DelegationAuthTbs tbs, AsymmetricKeyParameter key, DerObjectIdentifier sigOid)
     {
+        ValidateDelegationAuthTBSVersion(tbs);
         if (tbs.Nonce is null)
         {
             throw new AicException("DelegationAuthCrypto: TBS nonce is required");
@@ -79,6 +161,14 @@ public static class DelegationAuthCrypto
     public static bool Verify(DelegationAuthTbs tbs, DelegationAuthorization da, AsymmetricKeyParameter principalKey)
     {
         if (da is null || da.SignatureValue is null || da.SignatureAlgorithm is null || principalKey is null)
+        {
+            return false;
+        }
+        try
+        {
+            ValidateDelegationAuthTBSVersion(tbs);
+        }
+        catch (AicException)
         {
             return false;
         }
