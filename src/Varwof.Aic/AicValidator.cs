@@ -36,6 +36,10 @@ public static class AicValidator
         {
             throw new AicException("aic: agentId length " + aic.AgentId.Length + ": must be 1-256");
         }
+        if (aic.Version != 1 && aic.Version != 2)
+        {
+            throw new AicException("aic: version " + aic.Version + " must be 1 or 2");
+        }
         System.Collections.Generic.IReadOnlyList<Capability> caps = aic.Capabilities;
         if (caps.Count > Limits.MaxCapabilities)
         {

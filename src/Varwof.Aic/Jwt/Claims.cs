@@ -82,6 +82,9 @@ public static class Claims
         public string? Id { get; set; }
         public string? KeyHash { get; set; }
         public string? HashAlg { get; set; }
+
+        /// <summary>Canonical realm-qualified principal identifier ("realm:id").</summary>
+        public string SubjectID() => (Realm ?? "") + ":" + (Id ?? "");
     }
 
     /// <summary>Capability is the unified container (draft Section 6.1).</summary>
@@ -129,6 +132,13 @@ public static class Claims
         public AicClaims? Aic { get; set; }
         public string? Da { get; set; }
         public JsonNode? AuthorizationDetails { get; set; }
+        public Actor? Act { get; set; }
+    }
+
+    /// <summary>RFC 8693 actor member (representative mode).</summary>
+    public sealed class Actor
+    {
+        public string? Sub { get; set; }
     }
 
     /// <summary>Delegation reason (draft Section 5.2).</summary>
@@ -142,6 +152,12 @@ public static class Claims
     public sealed class DaClaims
     {
         public int Ver { get; set; }
+        public string? Iss { get; set; }
+        public string? Sub { get; set; }
+        public Audience? Aud { get; set; }
+        public long Exp { get; set; }
+        public long Iat { get; set; }
+        public string? Jti { get; set; }
         public string? AgentId { get; set; }
         public Principal? Principal { get; set; }
         public Reason? Reason { get; set; }
