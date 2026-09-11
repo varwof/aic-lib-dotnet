@@ -1,5 +1,8 @@
 # AIC SDK for .NET (C#)
 
+> ⭐ Like this repo? Give a star to the flagship one:
+> [![GitHub stars](https://img.shields.io/github/stars/varwof/core?style=social&label=varwof/core)](https://github.com/varwof/core)
+
 > **Maintainers wanted.** This is an open, community-oriented SDK. We welcome
 > active maintainers for review, porting, packaging, and platform testing.
 > See [CONTRIBUTING.md](../../.github/CONTRIBUTING.md) (org-wide) and the
